@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% from "ui.html" import icon, stage_track %}
+{% block title %}Projects · PhD Tracker{% endblock %}
+{% block content %}
+{% set active = projects | selectattr('status', 'equalto', 'active') | list %}
+{% set inactive = projects | selectattr('status', 'equalto', 'inactive') | list %}
+{% set closed = projects | selectattr('status', 'equalto', 'closed') | list %}
+
+<div class="page-head">
+  <div>
+    <h1>My projects</h1>
+    <p>Start with one project and add more as your PhD grows. Pause a project when you put it aside, and close it when it's finished or dropped.</p>
+  </div>
+  <a href="#new-project" class="btn btn-primary" onclick="document.getElementById('new-project').open = true">{{ icon("plus") }} New project</a>
+</div>
+
+{% macro project_card(p) %}
+<article id="p{{ p.id }}" class="project-card {{ p.status }}">
+  <div class="row between" style="align-items:flex-start">
+    <div class="ptitle">{{ p.title }}</div>
+    {% if p.status == 'active' %}<span class="badge green">Active</span>{% elif p.status == 'inactive' %}<span class="badge amber">{{ icon("pause") }} Paused</span>{% else %}<span class="badge">Closed</span>{% endif %}
+  </div>
+  <div>
+    <div class="row between tiny muted"><span>Stage: <strong style="color:var(--text-2)">{{ p.stage }}</strong></span>{% if p.target_journal %}<span>→ {{ p.target_journal }}</span>{% endif %}</div>
+    {{ stage_track(p.stage) }}
+  </div>
+  {% if p.description %}<p class="desc">{{ p.description }}</p>{% endif %}
+  {% if p.status_changed_at and p.status != 'active' %}<p class="tiny muted mb-0">{{ 'Paused' if p.status == 'inactive' else 'Closed' }} since {{ (p.status_changed_at|localtime).strftime('%d %b %Y') }}</p>{% endif %}
+
+  {% set ms = milestones.get(p.id, []) %}
+  {% if ms or p.status != 'closed' %}
+  <div>
+    <div class="label">Milestones</div>
+    <ul class="milestones">
+      {% for m in ms %}
+      {% set overdue = not m.done_at and m.due_date and m.due_date < today %}
+      <li class="{{ 'done' if m.done_at }} {{ 'overdue' if overdue }}">
+        <form class="inline" method="post" action="/student/milestones/{{ m.id }}/toggle">
+          <button class="tick" aria-label="{{ 'Mark as not done' if m.done_at else 'Mark as done' }}: {{ m.title }}">{% if m.done_at %}{{ icon("check") }}{% endif %}</button>
+        </form>
+        <span class="mt">{{ m.title }}</span>
+        {% if m.due_date %}<span class="due">{{ 'Overdue · ' if overdue }}{{ m.due_date.strftime('%d %b') }}</span>{% endif %}
+        <form class="inline del" method="post" action="/student/milestones/{{ m.id }}/delete" data-confirm="Delete this milestone?">
+          <button class="btn btn-ghost btn-sm" style="padding:.15rem" aria-label="Delete milestone {{ m.title }}">{{ icon("trash") }}</button>
+        </form>
+      </li>
+      {% else %}
+      <li class="muted small">No milestones yet.</li>
+      {% endfor %}
+    </ul>
+    {% if p.status != 'closed' %}
+    <form method="post" action="/student/projects/{{ p.id }}/milestones" class="add-ms mt-1">
+      <input name="title" placeholder="Add a milestone…" aria-label="New milestone" required>
+      <input type="date" name="due_date" aria-label="Due date">
+      <button type="submit" class="btn btn-secondary btn-sm" aria-label="Add milestone">{{ icon("plus") }}</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <details class="plain">
+    <summary>Edit details</summary>
+    <form method="post" action="/student/projects/{{ p.id }}" class="mt-1">
+      <label class="field"><span>Title</span><input name="title" value="{{ p.title }}" required></label>
+      <label class="field"><span>Short description</span><textarea name="description" rows="2" placeholder="Research question and method">{{ p.description }}</textarea></label>
+      <div class="grid-2">
+        <label class="field"><span>Stage</span><select name="stage">{% for s in STAGES %}<option {% if s == p.stage %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+        <label class="field"><span>Status</span><select name="status">{% for s in PROJECT_STATUSES %}<option value="{{ s }}" {% if s == p.status %}selected{% endif %}>{{ {'active': 'Active', 'inactive': 'Paused (inactive)', 'closed': 'Closed'}[s] }}</option>{% endfor %}</select></label>
+        <label class="field"><span>Target journal</span><input name="target_journal" value="{{ p.target_journal }}"></label>
+        <label class="field"><span>Display order</span><input type="number" name="position" value="{{ p.position }}" min="1"></label>
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm">Save changes</button>
+    </form>
+  </details>
+
+  <div class="foot">
+    {% if p.status != 'active' %}
+    <form class="inline" method="post" action="/student/projects/{{ p.id }}/status"><input type="hidden" name="status" value="active">
+      <button class="btn btn-secondary btn-sm">{{ icon("play") }} {{ 'Reopen' if p.status == 'closed' else 'Reactivate' }}</button></form>
+    {% endif %}
+    {% if p.status == 'active' %}
+    <form class="inline" method="post" action="/student/projects/{{ p.id }}/status"><input type="hidden" name="status" value="inactive">
+      <button class="btn btn-ghost btn-sm">{{ icon("pause") }} Pause</button></form>
+    {% endif %}
+    {% if p.status != 'closed' %}
+    <form class="inline" method="post" action="/student/projects/{{ p.id }}/status" data-confirm="Close '{{ p.title }}'? It will no longer appear in your weekly log. You can reopen it later.">
+      <input type="hidden" name="status" value="closed">
+      <button class="btn btn-ghost btn-sm">{{ icon("archive") }} Close</button></form>
+    {% endif %}
+  </div>
+</article>
+{% endmacro %}
+
+{% if not projects %}
+<div class="card empty">
+  {{ icon("folder") }}
+  <h3>No projects yet</h3>
+  <p>Add the project you're working on now. You can add more later.</p>
+</div>
+{% endif %}
+
+{% if active %}
+<div class="projects-grid">{% for p in active %}{{ project_card(p) }}{% endfor %}</div>
+{% endif %}
+
+{% if inactive %}
+<div class="section-head"><h2>{{ icon("pause", "lg") }} Paused <span class="muted small">{{ inactive|length }}</span></h2></div>
+<div class="projects-grid">{% for p in inactive %}{{ project_card(p) }}{% endfor %}</div>
+{% endif %}
+
+<details class="disclosure mt-3" id="new-project" {% if not projects %}open{% endif %}>
+  <summary>{{ icon("plus") }} {{ 'Add your first project' if not projects else 'Start a new project' }}</summary>
+  <div class="inner">
+    <form method="post" action="/student/projects">
+      <label class="field"><span>Title</span><input name="title" placeholder="e.g. Trust repair after alliance failure" required></label>
+      <label class="field"><span>Short description</span><textarea name="description" rows="2" placeholder="Research question and method, in one or two sentences"></textarea></label>
+      <div class="grid-2">
+        <label class="field"><span>Stage</span><select name="stage">{% for s in STAGES %}<option>{{ s }}</option>{% endfor %}</select></label>
+        <label class="field"><span>Target journal <small class="muted">(optional)</small></span><input name="target_journal"></label>
+      </div>
+      <button type="submit" class="btn btn-primary">{{ icon("plus") }} Add project</button>
+    </form>
+  </div>
+</details>
+
+{% if closed %}
+<details class="disclosure">
+  <summary>{{ icon("archive") }} Closed projects ({{ closed|length }})</summary>
+  <div class="inner"><div class="projects-grid">{% for p in closed %}{{ project_card(p) }}{% endfor %}</div></div>
+</details>
+{% endif %}
+{% endblock %}

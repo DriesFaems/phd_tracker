@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% from "ui.html" import icon %}
+{% block title %}AI assist · PhD Tracker{% endblock %}
+{% block container_class %}narrow{% endblock %}
+{% block content %}
+{% set descriptions = {
+  "assist_plan": ("calendar", "A realistic, prioritised plan based on your projects and recent updates."),
+  "assist_feedback": ("file", "Reviewer-style feedback on a paragraph, abstract or section."),
+  "assist_question": ("help", "Turn a vague stuck point into a short, answerable question."),
+} %}
+<div class="page-head">
+  <div>
+    <h1>AI assist</h1>
+    <p>Your personal research assistant. It knows your projects and recent updates, and runs on the group's own server.</p>
+  </div>
+</div>
+
+<section class="card">
+  <form method="post" action="/student/assist">
+    <fieldset>
+      <legend class="label mb-1">What do you need help with?</legend>
+      <div class="options">
+        {% for kind, label in labels.items() %}{% set ico, desc = descriptions[kind] %}
+        <label class="option"><input type="radio" name="kind" value="{{ kind }}" {% if loop.first %}checked{% endif %}>
+          <strong>{{ icon(ico) }} {{ label }}</strong><small>{{ desc }}</small></label>
+        {% endfor %}
+      </div>
+    </fieldset>
+    <label class="field"><span>Your input</span>
+      <textarea name="input_text" rows="7" placeholder="For a plan: deadlines, teaching, anything to consider.&#10;For feedback: paste your paragraph or abstract.&#10;For a question: describe where you're stuck and what you tried."></textarea></label>
+    <div class="row between">
+      <span class="ai-note">{{ icon("sparkles") }} Answers take about a minute. AI can be wrong; use your judgement.</span>
+      <button type="submit" class="btn btn-primary">{{ icon("sparkles") }} Ask Gemma</button>
+    </div>
+  </form>
+</section>
+
+{% if jobs %}
+<div class="section-head"><h2>{{ icon("history", "lg") }} Recent answers</h2></div>
+{% for job in jobs %}
+<article class="card">
+  <div class="card-head">
+    <h3>{{ icon(descriptions[job.kind][0]) }} {{ labels[job.kind] }}</h3>
+    <span class="muted small">{{ job.created_at | ago }}</span>
+  </div>
+  {% if job.input_text %}<details class="plain mb-1"><summary>Your input</summary><div class="raw">{{ job.input_text }}</div></details>{% endif %}
+  {% with mode="block", log_id=None %}{% include "partials/job.html" %}{% endwith %}
+</article>
+{% endfor %}
+{% endif %}
+{% endblock %}

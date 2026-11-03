@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% from "ui.html" import icon, stage_track, status_badge %}
+{% block title %}{{ student.name }} · PhD Tracker{% endblock %}
+{% block content %}
+{% set open = projects | rejectattr('status', 'equalto', 'closed') | list %}
+{% set closed = projects | selectattr('status', 'equalto', 'closed') | list %}
+{% set open_help = entries.values() | sum(start=[]) | selectattr('needs_help') | rejectattr('resolved_at') | list %}
+
+<a href="/supervisor" class="back">{{ icon("arrow-left") }} Dashboard</a>
+<div class="page-head">
+  <div class="row" style="gap:1rem">
+    <span class="avatar lg">{{ student.name | initials }}</span>
+    <div>
+      <h1 class="mb-0">{{ student.name }}</h1>
+      <p><a href="mailto:{{ student.email }}">{{ student.email }}</a>{% if student.last_login %} · last signed in {{ student.last_login | ago }}{% endif %}</p>
+    </div>
+  </div>
+  <a href="mailto:{{ student.email }}" class="btn btn-secondary">{{ icon("mail") }} Email {{ student.name | firstname }}</a>
+</div>
+
+<section class="stats" aria-label="Overview">
+  <div class="stat"><p class="label">{{ icon("folder") }} Open projects</p><div class="value">{{ open|length }}</div><div class="sub">{{ open | selectattr('status', 'equalto', 'inactive') | list | length }} paused{% if closed %} · {{ closed|length }} closed{% endif %}</div></div>
+  <div class="stat"><p class="label">{{ icon("pen") }} Last update</p><div class="value" style="font-size:1.2rem;padding-top:.3rem">{% if logs %}{{ logs[0].week | week_num }}{% else %}None yet{% endif %}</div><div class="sub">{% if logs and logs[0].submitted_at %}submitted {{ logs[0].submitted_at | ago }}{% else %}&nbsp;{% endif %}</div></div>
+  <div class="stat {{ 'alert-red' if open_help }}"><p class="label">{{ icon("help") }} Open help requests</p><div class="value">{{ open_help|length }}</div><div class="sub">{{ 'see the weekly updates below' if open_help else 'nothing waiting' }}</div></div>
+  <div class="stat"><p class="label">{{ icon("calendar") }} Updates logged</p><div class="value">{{ logs|length }}</div><div class="sub">in the last 6 months</div></div>
+</section>
+
+{% macro project_card(p) %}{% set color, reasons = statuses[p.id] %}
+<article class="project-card {{ p.status }}">
+  <div class="row between" style="align-items:flex-start">
+    <div class="ptitle">{{ p.title }}</div>
+    {% if p.status == 'active' %}{{ status_badge(color) }}{% elif p.status == 'inactive' %}<span class="badge amber">{{ icon("pause") }} Paused</span>{% else %}<span class="badge">Closed</span>{% endif %}
+  </div>
+  <div>
+    <div class="row between tiny muted"><span>Stage: <strong style="color:var(--text-2)">{{ p.stage }}</strong></span>{% if p.target_journal %}<span>→ {{ p.target_journal }}</span>{% endif %}</div>
+    {{ stage_track(p.stage) }}
+  </div>
+  {% if p.description %}<p class="desc">{{ p.description }}</p>{% endif %}
+  {% if reasons and p.status == 'active' and color != 'grey' %}<p class="small mb-0" style="color:var(--{{ color }}-text);font-weight:500">{{ reasons | join(' · ') | ucfirst }}</p>{% endif %}
+  {% if p.status == 'inactive' and reasons %}<p class="tiny muted mb-0">{{ reasons | join(' · ') | ucfirst }}</p>{% endif %}
+  {% set ms = milestones.get(p.id, []) %}
+  {% if ms %}
+  <ul class="milestones">
+    {% for m in ms %}{% set overdue = not m.done_at and m.due_date and m.due_date < today %}
+    <li class="{{ 'done' if m.done_at }} {{ 'overdue' if overdue }}"><span class="tick" aria-hidden="true">{% if m.done_at %}{{ icon("check") }}{% endif %}</span><span class="mt">{{ m.title }}</span>{% if m.due_date %}<span class="due">{{ 'Overdue · ' if overdue }}{{ m.due_date.strftime('%d %b') }}</span>{% endif %}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% set hist = stage_history.get(p.id, []) %}
+  <p class="tiny muted mb-0" style="margin-top:auto">Started {{ (p.created_at|localtime).strftime('%b %Y') }}{% if hist|length > 1 %} · {% for sc in hist %}{{ sc.stage }}{% if not loop.last %} → {% endif %}{% endfor %}{% endif %}</p>
+</article>
+{% endmacro %}
+
+<div class="section-head"><h2>{{ icon("folder", "lg") }} Projects <span class="muted small">{{ open|length }} open{% if closed %}, {{ closed|length }} closed{% endif %}</span></h2></div>
+{% if open %}
+<div class="projects-grid">{% for p in open %}{{ project_card(p) }}{% endfor %}</div>
+{% else %}
+<div class="card empty">{{ icon("folder") }}<p>{{ student.name | firstname }} has no open projects{% if not closed %} yet{% endif %}.</p></div>
+{% endif %}
+{% if closed %}
+<details class="disclosure mt-2">
+  <summary>Closed projects ({{ closed|length }})</summary>
+  <div class="inner"><div class="projects-grid">{% for p in closed %}{{ project_card(p) }}{% endfor %}</div></div>
+</details>
+{% endif %}
+
+<div class="section-head"><h2>{{ icon("history", "lg") }} Weekly updates</h2></div>
+{% for wl in logs %}
+<article class="log-card" id="log{{ wl.id }}">
+  <header>
+    <span class="row"><span class="week">{{ wl.week | week_num }}</span><span class="muted small">{{ wl.week | week_range }}{% if wl.submitted_at %} · submitted {{ wl.submitted_at | ago }}{% endif %}</span></span>
+    <span class="row">
+      {% if wl.llm_status == 'pending' %}<span class="badge ai"><span class="spinner" style="width:12px;height:12px"></span> AI processing</span>
+      {% elif wl.llm_status == 'failed' %}<span class="badge red">AI failed</span>
+        <form class="inline" method="post" action="/supervisor/log/{{ wl.id }}/retry"><button class="btn btn-ghost btn-sm">Retry</button></form>{% endif %}
+    </span>
+  </header>
+  <div class="body">
+    {% if wl.summary %}<p class="log-summary">{{ icon("sparkles") }}<span>{{ wl.summary }}</span></p>{% endif %}
+    {% for e in entries.get(wl.id, []) %}
+      {% with project=project_map.get(e.project_id) %}{% include "partials/entry.html" %}{% endwith %}
+      {% if e.needs_help and not e.resolved_at %}
+      <div class="mb-2" style="margin-top:-.3rem"><button class="btn btn-ghost btn-sm" hx-post="/supervisor/entry/{{ e.id }}/resolve" hx-swap="outerHTML">{{ icon("check") }} Mark help request as resolved</button></div>
+      {% endif %}
+    {% endfor %}
+    <details class="plain" {% if not entries.get(wl.id) %}open{% endif %}><summary>Show original text</summary><div class="raw">{{ wl.raw_text }}</div></details>
+  </div>
+  {% with thread=comments.get(wl.id, []), log_id=wl.id, action_url='/supervisor/log/' ~ wl.id ~ '/comment', next_url='/supervisor/student/' ~ student.id ~ '#log' ~ wl.id, placeholder='Feedback for ' ~ (student.name | firstname) ~ '…', title='Feedback' %}
+  {% set extra_actions %}<span id="draft-{{ wl.id }}"><button type="button" class="btn btn-ai btn-sm" hx-post="/supervisor/log/{{ wl.id }}/draft" hx-target="#draft-{{ wl.id }}" hx-swap="innerHTML">{{ icon("sparkles") }} Draft feedback with AI</button></span>{% endset %}
+  {% include "partials/thread.html" %}
+  {% endwith %}
+</article>
+{% else %}
+<div class="card empty">{{ icon("history") }}<h3>No updates yet</h3><p>{{ student.name | firstname }} hasn't submitted a weekly update yet.</p></div>
+{% endfor %}
+{% endblock %}

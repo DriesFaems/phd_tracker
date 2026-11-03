@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% from "ui.html" import icon %}
+{% block body %}
+<main class="auth">
+  <div class="auth-card">
+    <div class="brand"><span class="brand-mark">{{ icon("cap") }}</span><span>PhD Tracker</span></div>
+    {% block card %}{% endblock %}
+  </div>
+</main>
+{% endblock %}

@@ -1,0 +1,57 @@
+{% from "ui.html" import icon %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}PhD Tracker{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="/static/app.css?v=5">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231d3c8f'/%3E%3Cpath d='M26 13L16 8 6 13l10 5 10-5z' fill='none' stroke='white' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M10 15v5c3 3 9 3 12 0v-5' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
+  <script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js"></script>
+  <script src="/static/app.js?v=5" defer></script>
+</head>
+<body>
+{% block body %}
+  <header class="app-header">
+    <div class="container">
+      <a href="/" class="brand"><span class="brand-mark">{{ icon("cap") }}</span><span>PhD Tracker</span></a>
+      {% if user %}
+      <nav class="nav" aria-label="Main">
+        {% macro navlink(href, ico, label, count=0, exact=False) -%}
+          {% set on = (path == href) if exact else path.startswith(href) %}
+          <a href="{{ href }}" class="{{ 'active' if on }}" {% if on %}aria-current="page"{% endif %}>{{ icon(ico) }}<span class="label">{{ label }}</span>{% if count %}<span class="count" aria-label="{{ count }} unread">{{ count }}</span>{% endif %}</a>
+        {%- endmacro %}
+        {% if user.role == "supervisor" %}
+          {{ navlink("/supervisor", "dashboard", "Dashboard", exact=True) }}
+          {{ navlink("/supervisor/digest", "sparkles", "Weekly digest") }}
+          {{ navlink("/supervisor/students", "users", "Students") }}
+        {% else %}
+          {{ navlink("/student/week", "pen", "This week") }}
+          {{ navlink("/student/projects", "folder", "Projects") }}
+          {{ navlink("/student/history", "history", "History & feedback", unread) }}
+          {{ navlink("/student/assist", "sparkles", "AI assist") }}
+        {% endif %}
+      </nav>
+      <details class="user-menu">
+        <summary aria-label="Account menu"><span class="avatar sm">{{ user.name | initials }}</span><span class="name">{{ user.name }}</span></summary>
+        <div class="menu">
+          <div class="who"><div class="strong">{{ user.name }}</div><div class="tiny muted">{{ user.email }} · {{ user.role }}</div></div>
+          <form method="post" action="/logout"><button class="btn btn-ghost btn-sm btn-block" type="submit">{{ icon("logout") }} Log out</button></form>
+        </div>
+      </details>
+      {% endif %}
+    </div>
+  </header>
+  <main class="container {% block container_class %}{% endblock %}">
+    {% block content %}{% endblock %}
+  </main>
+{% endblock %}
+  {% if flashes %}
+  <div class="toasts" role="status" aria-live="polite">
+    {% for f in flashes %}<div class="toast {{ f.kind }}">{{ icon("check-circle" if f.kind != "error" else "alert") }}<span>{{ f.message }}</span><button type="button" aria-label="Dismiss">×</button></div>{% endfor %}
+  </div>
+  {% endif %}
+</body>
+</html>

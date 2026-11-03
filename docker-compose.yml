@@ -1,0 +1,26 @@
+# Runs on the server that also runs your Ollama.
+# Host networking lets the app reach Ollama on localhost:11434 without exposing Ollama;
+# only Caddy listens publicly (ports 80/443).
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    network_mode: host
+    env_file: .env
+    volumes:
+      - ./data:/srv/app/data
+      - ./backups:/srv/app/backups
+
+  caddy:
+    image: caddy:2.8
+    restart: unless-stopped
+    network_mode: host
+    env_file: .env
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

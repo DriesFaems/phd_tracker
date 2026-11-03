@@ -1,0 +1,20 @@
+{# AI job result. mode "textarea" = feedback draft that fills the reply box; "block" = rendered markdown. #}
+{% from "ui.html" import icon %}
+{% if job.status == "pending" %}
+<div hx-get="/ai/job/{{ job.id }}?mode={{ mode }}{% if log_id %}&log_id={{ log_id }}{% endif %}" hx-trigger="every 3s" hx-swap="outerHTML">
+  <div class="ai-pending" role="status" aria-live="polite"><span class="spinner"></span> Gemma is writing… this can take a minute.</div>
+</div>
+{% elif job.status == "failed" %}
+<div class="alert error" role="alert">{{ icon("alert") }}<p>The AI request failed: {{ job.error[:300] }}</p></div>
+{% elif mode == "textarea" %}
+<div class="ai-note" role="status">{{ icon("sparkles") }} Draft inserted in the reply box. Edit it before sending.
+  <script>
+    (function () {
+      var box = document.getElementById("reply-{{ log_id }}");
+      if (box) { box.value = {{ job.output_text | tojson }}; box.style.height = (box.scrollHeight + 4) + "px"; box.focus(); }
+    })();
+  </script>
+</div>
+{% else %}
+<div class="ai-box">{{ job.output_text | markdown }}</div>
+{% endif %}

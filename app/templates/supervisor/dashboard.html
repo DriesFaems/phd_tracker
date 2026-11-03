@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% from "ui.html" import icon, momentum, week_switch %}
+{% block title %}Dashboard · PhD Tracker{% endblock %}
+{% block content %}
+{% set help_items = attention | selectattr("kind", "equalto", "help") | list %}
+{% set all_cells = rows | map(attribute="cells") | sum(start=[]) %}
+{% set at_risk = all_cells | selectattr("color", "in", ["red", "amber"]) | list %}
+{% set active_projects = all_cells | selectattr("project.status", "equalto", "active") | list %}
+
+<div class="page-head">
+  <div>
+    <h1>Supervision dashboard</h1>
+    <p>{{ week | week_num }} · {{ week | week_range }}</p>
+  </div>
+  <div class="row">
+    {{ week_switch(week, prev_week, next_week) }}
+    <form method="post" action="/supervisor/digest" class="inline">
+      <input type="hidden" name="week" value="{{ week }}">
+      <button type="submit" class="btn btn-ai">{{ icon("sparkles") }} Generate digest</button>
+    </form>
+  </div>
+</div>
+
+<section class="stats" aria-label="This week at a glance">
+  <div class="stat">
+    <p class="label">{{ icon("pen") }} Weekly logs</p>
+    <div class="value">{{ submitted }}<small> / {{ rows|length }}</small></div>
+    <div class="progress"><div style="width: {{ (submitted / rows|length * 100) if rows else 0 }}%"></div></div>
+    <div class="sub">{{ submitted }} of {{ rows|length }} students logged this week</div>
+  </div>
+  <div class="stat {{ 'alert-red' if help_items }}">
+    <p class="label">{{ icon("help") }} Open help requests</p>
+    <div class="value">{{ help_items|length }}</div>
+    <div class="sub">{{ 'Waiting for your answer' if help_items else 'Nobody is waiting on you' }}</div>
+  </div>
+  <div class="stat {{ 'alert-amber' if at_risk }}">
+    <p class="label">{{ icon("alert") }} Projects needing attention</p>
+    <div class="value">{{ at_risk|length }}<small> / {{ all_cells|length }}</small></div>
+    <div class="sub">{{ active_projects|length }} active, {{ all_cells|length - active_projects|length }} paused</div>
+  </div>
+  <div class="stat">
+    <p class="label">{{ icon("sparkles") }} AI assistant</p>
+    <div hx-get="/supervisor/health" hx-trigger="load">
+      <div class="value health-value"><span class="spinner"></span> Checking…</div>
+      <div class="sub">Gemma on your own server</div>
+    </div>
+  </div>
+</section>
+
+<div class="section-head">
+  <h2>{{ icon("alert", "lg") }} Needs attention {% if attention %}<span class="count-badge">{{ attention|length }}</span>{% endif %}</h2>
+</div>
+<section class="attention" aria-label="Needs attention">
+  {% for a in attention %}
+    {% if a.kind == "help" %}
+    <div class="att-item">
+      <div class="att-icon red">{{ icon("help") }}</div>
+      <div class="att-body">
+        <div class="att-title"><a href="/supervisor/student/{{ a.student.id }}#log{{ a.log.id }}">{{ a.student.name }}</a> asks for input on <strong>{{ a.project.title }}</strong></div>
+        <p class="att-question">“{{ a.entry.help_question or a.entry.blockers or 'Would like your input' }}”</p>
+        <div class="att-meta">{% if a.entry.blockers and a.entry.help_question %}Blocker: {{ a.entry.blockers }} · {% endif %}{{ a.log.week | week_num }}{% if a.log.submitted_at %}, {{ a.log.submitted_at | ago }}{% endif %}</div>
+        <div class="att-actions row">
+          <details class="reply">
+            <summary><span class="btn btn-primary btn-sm">{{ icon("message") }} Reply</span></summary>
+            <form hx-post="/supervisor/log/{{ a.log.id }}/comment" hx-target="closest .att-item" hx-swap="outerHTML">
+              <input type="hidden" name="entry_id" value="{{ a.entry.id }}">
+              <textarea name="body" placeholder="Your answer to {{ a.student.name | firstname }}…" required></textarea>
+              <div class="row">
+                <button type="submit" class="btn btn-primary btn-sm">{{ icon("send") }} Send</button>
+                <label class="check"><input type="checkbox" name="resolve" checked> Mark as resolved</label>
+              </div>
+            </form>
+          </details>
+          <button type="button" class="btn btn-ghost btn-sm" hx-post="/supervisor/entry/{{ a.entry.id }}/resolve" hx-target="closest .att-item" hx-swap="outerHTML">{{ icon("check") }} Mark resolved</button>
+        </div>
+      </div>
+    </div>
+    {% elif a.kind == "missing" %}
+    <div class="att-item">
+      <div class="att-icon red">{{ icon("clock") }}</div>
+      <div class="att-body">
+        <div class="att-title"><a href="/supervisor/student/{{ a.student.id }}">{{ a.student.name }}</a> {% if a.gap is none %}has not submitted a weekly log yet{% else %}has not logged for <strong>{{ a.gap }} weeks</strong>{% endif %}</div>
+        <div class="att-meta">Consider a quick check-in.</div>
+      </div>
+    </div>
+    {% elif a.kind == "amber" %}
+    <div class="att-item">
+      <div class="att-icon amber">{{ icon("trending-down") }}</div>
+      <div class="att-body">
+        <div class="att-title"><a href="/supervisor/student/{{ a.student.id }}">{{ a.student.name }}</a> · <strong>{{ a.project.title }}</strong></div>
+        <div class="att-meta">{{ a.reasons | join(" · ") | ucfirst }}</div>
+      </div>
+    </div>
+    {% elif a.kind == "llm_failed" %}
+    <div class="att-item">
+      <div class="att-icon grey">{{ icon("sparkles") }}</div>
+      <div class="att-body">
+        <div class="att-title">AI could not structure <a href="/supervisor/student/{{ a.student.id }}">{{ a.student.name }}</a>'s log</div>
+        <div class="att-meta">{{ a.log.llm_error[:140] }}</div>
+        <div class="att-actions"><form class="inline" method="post" action="/supervisor/log/{{ a.log.id }}/retry"><button class="btn btn-secondary btn-sm">Retry</button></form></div>
+      </div>
+    </div>
+    {% endif %}
+  {% else %}
+    <div class="empty-good">{{ icon("check-circle", "lg") }}<span><strong>All clear.</strong> No open help requests and every project is on track.</span></div>
+  {% endfor %}
+</section>
+
+<div class="section-head">
+  <h2>{{ icon("users", "lg") }} Students</h2>
+  {% if rows %}
+  <div class="filters" data-target=".student-row" role="group" aria-label="Filter students">
+    <button type="button" class="on" data-filter="all">All {{ rows|length }}</button>
+    <button type="button" data-filter="attention">Needs attention {{ rows | selectattr("color", "in", ["red", "amber"]) | list | length }}</button>
+    <button type="button" data-filter="ok">On track {{ rows | selectattr("color", "in", ["green", "grey"]) | list | length }}</button>
+  </div>
+  {% endif %}
+</div>
+
+{% for r in rows %}
+<article class="student-row" data-status="{{ r.color }}">
+  <div class="who">
+    <a class="name" href="/supervisor/student/{{ r.student.id }}"><span class="avatar">{{ r.student.name | initials }}</span>{{ r.student.name }}</a>
+    <div class="meta">
+      <span class="row" style="gap:.45rem"><span class="dot {{ r.color }}"></span>
+        {% if r.this_log and r.this_log.status == 'submitted' %}Logged this week
+        {% elif r.gap is none %}No logs yet
+        {% elif r.gap == 1 %}Last log last week
+        {% else %}Last log {{ r.gap }} weeks ago{% endif %}
+      </span>
+      <span>{% set n_active = r.cells | selectattr("project.status", "equalto", "active") | list | length %}{{ n_active }} active project{{ "s" if n_active != 1 }}{% if r.closed %} · {{ r.closed }} closed{% endif %}</span>
+    </div>
+    {% if r.this_log and r.this_log.summary %}<p class="summary">{{ r.this_log.summary }}</p>{% endif %}
+  </div>
+  <div class="projects">
+    {% for c in r.cells %}
+    <a href="/supervisor/student/{{ r.student.id }}" class="pcard {{ c.color }} {{ c.project.status }}" style="color:inherit;text-decoration:none">
+      <div class="ptitle">{{ c.project.title }}</div>
+      <div class="row" style="gap:.35rem">
+        <span class="badge">{{ c.project.stage }}</span>
+        {% if c.project.status == 'inactive' %}<span class="badge outline">{{ icon("pause") }} Paused</span>{% endif %}
+        {% if c.latest and c.project.status == 'active' %}{{ momentum(c.latest[0].momentum) }}{% endif %}
+      </div>
+      {% if c.project.status == 'active' %}
+        {% if c.latest %}{% set e, w = c.latest %}
+          <div class="latest">{{ e.progress or e.next_steps or 'No details' }}</div>
+          <div class="when">{{ w | week_num }}</div>
+        {% else %}<div class="latest muted">No updates yet</div>{% endif %}
+      {% endif %}
+      {% if c.reasons %}<div class="reasons">{{ c.reasons | join(" · ") | ucfirst }}</div>{% endif %}
+    </a>
+    {% else %}
+    <p class="muted small" style="margin:.3rem">No projects yet.</p>
+    {% endfor %}
+    {% if r.closed %}<span class="muted tiny" style="align-self:flex-end">+ {{ r.closed }} closed project{{ 's' if r.closed > 1 }}</span>{% endif %}
+  </div>
+</article>
+{% else %}
+<div class="card empty">
+  {{ icon("users") }}
+  <h3>No students yet</h3>
+  <p>Invite your PhD students to start following their progress.</p>
+  <a href="/supervisor/students" class="btn btn-primary">{{ icon("plus") }} Add students</a>
+</div>
+{% endfor %}
+
+{% if rows %}
+<div class="legend">
+  <span><span class="dot red"></span>Asks for help or 2+ weeks without a log</span>
+  <span><span class="dot amber"></span>Low momentum, overdue milestone or no progress for 3+ weeks</span>
+  <span><span class="dot green"></span>On track</span>
+  <span><span class="dot grey"></span>Paused or no data yet</span>
+</div>
+{% endif %}
+{% endblock %}

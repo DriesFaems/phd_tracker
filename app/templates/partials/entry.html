@@ -1,0 +1,16 @@
+{# expects: e (LogEntry), project #}
+{% from "ui.html" import icon, momentum %}
+<div class="entry{% if e.needs_help and not e.resolved_at %} help{% endif %}">
+  <div class="entry-head">
+    <strong>{{ project.title if project else 'Project' }}</strong>
+    {{ momentum(e.momentum) }}
+    {% if e.needs_help %}{% if e.resolved_at %}<span class="badge green">{{ icon("check") }} Help request resolved</span>{% else %}<span class="badge red">{{ icon("help") }} Asks for input</span>{% endif %}{% endif %}
+    {% if not e.confirmed %}<span class="badge ai" title="Extracted by AI, not reviewed by the student">{{ icon("sparkles") }} Not reviewed</span>{% endif %}
+  </div>
+  <dl>
+    {% if e.progress %}<dt>Done</dt><dd>{{ e.progress }}</dd>{% endif %}
+    {% if e.next_steps %}<dt>Next</dt><dd>{{ e.next_steps }}</dd>{% endif %}
+    {% if e.blockers %}<dt>Blockers</dt><dd>{{ e.blockers }}</dd>{% endif %}
+    {% if e.needs_help and e.help_question %}<dt>Question</dt><dd><strong>{{ e.help_question }}</strong></dd>{% endif %}
+  </dl>
+</div>

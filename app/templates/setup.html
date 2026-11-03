@@ -1,0 +1,14 @@
+{% extends "_auth.html" %}
+{% block title %}Set up · PhD Tracker{% endblock %}
+{% block card %}
+<h1>Set up your workspace</h1>
+<p class="lead">Create the supervisor account. Next, you can invite your PhD students.</p>
+{% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
+<form method="post" action="/setup">
+  <label class="field"><span>Your name</span><input name="name" value="{{ name or '' }}" autocomplete="name" required autofocus></label>
+  <label class="field"><span>Email</span><input type="email" name="email" value="{{ email or '' }}" autocomplete="username" required></label>
+  <label class="field"><span>Password</span><input type="password" name="password" minlength="10" autocomplete="new-password" required><small class="hint">At least 10 characters.</small></label>
+  <label class="field"><span>Repeat password</span><input type="password" name="password2" minlength="10" autocomplete="new-password" required></label>
+  <button type="submit" class="btn btn-primary btn-block btn-lg">Create account</button>
+</form>
+{% endblock %}

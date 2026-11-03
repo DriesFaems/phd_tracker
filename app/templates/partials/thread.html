@@ -1,0 +1,24 @@
+{# expects: thread (list of (comment, author)), log_id, action_url, next_url; optional: unread_ids, placeholder, title #}
+{% from "ui.html" import icon %}
+<div class="thread">
+  <h4>{{ icon("message") }} {{ title or 'Discussion' }}{% if thread %} <span class="muted tiny">({{ thread|length }})</span>{% endif %}</h4>
+  {% for c, author in thread %}
+  {% set is_new = unread_ids and c.id in unread_ids %}
+  <div class="msg {{ author.role }}{% if is_new %} new{% endif %}">
+    <span class="avatar sm">{{ author.name | initials }}</span>
+    <div>
+      <div class="meta"><strong>{{ author.name }}</strong> · <span title="{{ (c.created_at|localtime).strftime('%d %b %Y %H:%M') }}">{{ c.created_at | ago }}</span>{% if is_new %} · <span class="badge amber">new</span>{% endif %}</div>
+      <div class="bubble">{{ c.body | markdown }}</div>
+    </div>
+  </div>
+  {% endfor %}
+  <form method="post" action="{{ action_url }}" class="composer">
+    <input type="hidden" name="next" value="{{ next_url }}">
+    <label for="reply-{{ log_id }}" class="sr-only">Reply</label>
+    <textarea name="body" id="reply-{{ log_id }}" rows="2" placeholder="{{ placeholder or 'Write a reply…' }}" required></textarea>
+    <div class="row">
+      <button type="submit" class="btn btn-primary btn-sm">{{ icon("send") }} Send</button>
+      {{ extra_actions | default('') }}
+    </div>
+  </form>
+</div>

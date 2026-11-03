@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% from "ui.html" import icon %}
+{% block title %}Weekly digest · PhD Tracker{% endblock %}
+{% block content %}
+<div class="page-head no-print">
+  <div>
+    <h1>Weekly digest</h1>
+    <p>A one-page overview of all students, with talking points for your next meetings. Written by Gemma from this week's updates.</p>
+  </div>
+  <form method="post" action="/supervisor/digest" class="inline">
+    <input type="hidden" name="week" value="{{ week }}">
+    <button type="submit" class="btn btn-ai">{{ icon("sparkles") }} Generate for {{ week | week_num }}</button>
+  </form>
+</div>
+
+<div class="layout-side">
+  <section class="card">
+    {% if selected %}
+    <div class="card-head">
+      <div>
+        <h3>Digest · {{ selected.week | week_num }} <span class="muted small" style="font-weight:400">{{ selected.week | week_range }}</span></h3>
+        <span class="tiny muted">Generated {{ selected.created_at | ago }}</span>
+      </div>
+      {% if selected.status == 'done' %}<button class="btn btn-secondary btn-sm no-print" onclick="window.print()">{{ icon("printer") }} Print</button>{% endif %}
+    </div>
+    {% if selected.status == 'done' %}
+      <div class="doc">{{ selected.output_text | markdown }}</div>
+      <p class="ai-note mt-3 no-print">{{ icon("sparkles") }} AI-generated from the students' logs. Check the details on each student's page.</p>
+    {% else %}
+      {% with job=selected, mode="block", log_id=None %}{% include "partials/job.html" %}{% endwith %}
+    {% endif %}
+    {% else %}
+    <div class="empty">
+      {{ icon("sparkles") }}
+      <h3>No digest yet</h3>
+      <p>Generate your first digest to get a summary of all students in one page.</p>
+    </div>
+    {% endif %}
+  </section>
+
+  <aside class="card no-print">
+    <h3>Earlier digests</h3>
+    {% if digests %}
+    <ul class="milestones mt-1">
+      {% for d in digests %}
+      <li><a href="?job_id={{ d.id }}" {% if selected and d.id == selected.id %}style="font-weight:700"{% endif %}>{{ d.week | week_num }}</a>
+        <span class="due">{% if d.status == 'failed' %}<span class="badge red">failed</span>{% elif d.status == 'pending' %}<span class="badge ai">writing…</span>{% else %}{{ (d.created_at|localtime).strftime('%d %b %H:%M') }}{% endif %}</span></li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="muted small mb-0">None yet.</p>{% endif %}
+  </aside>
+</div>
+{% endblock %}

@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% from "ui.html" import icon, week_switch %}
+{% block title %}Weekly log · PhD Tracker{% endblock %}
+{% block content %}
+{% set active = projects | selectattr("status", "equalto", "active") | list %}
+{% set submitted = wlog and wlog.status == "submitted" %}
+{% set reviewing = wlog and not submitted %}
+
+<div class="page-head">
+  <div>
+    <h1>{{ 'This week' if week == this_week else 'Weekly log' }}</h1>
+    <p>{{ week | week_num }} · {{ week | week_range }}</p>
+  </div>
+  {{ week_switch(week, prev_week, next_week) }}
+</div>
+
+<ol class="stepper" aria-label="Progress">
+  <li class="step {{ 'done' if wlog else 'current' }}"><span class="n">{{ icon("check") if wlog else '1' }}</span>Write</li>
+  <li class="step-line" aria-hidden="true"></li>
+  <li class="step {{ 'done' if submitted else ('current' if reviewing else '') }}"><span class="n">{{ icon("check") if submitted else '2' }}</span>Review</li>
+  <li class="step-line" aria-hidden="true"></li>
+  <li class="step {{ 'done' if submitted }}"><span class="n">{{ icon("check") if submitted else '3' }}</span>Submitted</li>
+</ol>
+
+{% if not projects %}
+<div class="alert warn">{{ icon("folder") }}<p>You have no open projects yet. <a href="/student/projects">Add your first project</a> so your updates can be linked to it.</p></div>
+{% elif not active %}
+<div class="alert warn">{{ icon("pause") }}<p>All your projects are paused. <a href="/student/projects">Reactivate one or start a new project</a> when you pick up work again.</p></div>
+{% endif %}
+{% if submitted %}
+<div class="alert ok">{{ icon("check-circle") }}<p><strong>Submitted {{ wlog.submitted_at | ago }}.</strong> Your supervisor can see this week's update. You can still change it below.</p></div>
+{% endif %}
+
+<div class="layout-side">
+  <div>
+    <section class="card writer" aria-labelledby="write-title">
+      <div class="card-head">
+        <h3 id="write-title">{{ icon("pen") }} What happened this week?</h3>
+        <span class="saved-note" data-autosave-note></span>
+      </div>
+      <form method="post" action="/student/week">
+        <input type="hidden" name="week" value="{{ week }}">
+        <label for="raw_text" class="sr-only">Your weekly update</label>
+        <textarea id="raw_text" name="raw_text" class="big" data-autosave="{{ user.id }}-{{ week }}"
+          placeholder="Write freely, as you would in an email to your supervisor. For example:&#10;&#10;CVC paper: coded 6 more interviews; a theme on autonomy is emerging. Next: finish coding by Friday.&#10;Alliance paper: stuck on the identification strategy. Could we discuss Heckman vs. reframing?">{{ wlog.raw_text if wlog else '' }}</textarea>
+        <div class="row between mt-2">
+          <span class="ai-note">{{ icon("sparkles") }} Gemma splits your text per project; you check it before submitting.</span>
+          <div class="row">
+            {% if not submitted %}<button type="submit" name="action" value="submit_raw" class="btn btn-ghost" title="Submit straight away; the AI structures it in the background">Submit without review</button>{% endif %}
+            <button type="submit" name="action" value="analyse" class="btn btn-primary">{{ icon("sparkles") }} {{ 'Re-analyse' if wlog and wlog.llm_status == 'done' else 'Structure with AI' }} {{ icon("arrow-right") }}</button>
+          </div>
+        </div>
+      </form>
+    </section>
+
+    {% if wlog %}
+    <div id="review" class="mt-2" hx-get="/student/log/{{ wlog.id }}/review" hx-trigger="load" hx-swap="outerHTML">
+      <div class="card"><div class="ai-pending"><span class="spinner"></span> Loading…</div></div>
+    </div>
+    {% endif %}
+
+    {% if wlog and (comments or submitted) %}
+    <section class="log-card mt-3">
+      {% with thread=comments, log_id=wlog.id, action_url='/student/log/' ~ wlog.id ~ '/comment', next_url='/student/week?week=' ~ week, unread_ids=None, placeholder='Message your supervisor about this week…', title='Discussion with your supervisor' %}
+      {% include "partials/thread.html" %}
+      {% endwith %}
+    </section>
+    {% endif %}
+  </div>
+
+  <aside class="stack">
+    <div class="card muted-card tips">
+      <h3>{{ icon("lightbulb") }} A good update covers</h3>
+      <ul>
+        <li>{{ icon("check") }}<span><strong>What you did</strong> on each project, however small</span></li>
+        <li>{{ icon("check") }}<span><strong>What's next</strong>, ideally with a date</span></li>
+        <li>{{ icon("check") }}<span><strong>Where you're stuck</strong> and what you'd like input on</span></li>
+      </ul>
+      <p class="hint mt-2 mb-0">Five minutes is enough. Bullet points are fine.</p>
+    </div>
+    {% if projects %}
+    <div class="card">
+      <h3>Your projects</h3>
+      <p class="hint mt-0">Mention them by name so the AI can match your text.</p>
+      <div class="project-chips">
+        {% for p in active %}<span class="badge blue">{{ p.title }}</span>{% endfor %}
+        {% for p in projects if p.status == 'inactive' %}<span class="badge" title="Paused">{{ icon("pause") }} {{ p.title }}</span>{% endfor %}
+      </div>
+      <a href="/student/projects" class="small">Manage projects →</a>
+    </div>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

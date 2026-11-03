@@ -1,0 +1,13 @@
+{% extends "_auth.html" %}
+{% block title %}Sign in · PhD Tracker{% endblock %}
+{% block card %}
+<h1>Welcome back</h1>
+<p class="lead">Sign in to log your progress or follow up your PhD team.</p>
+{% if error %}<div class="alert error" role="alert">Wrong email or password. Please try again.</div>{% endif %}
+<form method="post" action="/login">
+  <label class="field"><span>Email</span><input type="email" name="email" value="{{ email or '' }}" autocomplete="username" required autofocus></label>
+  <label class="field"><span>Password</span><input type="password" name="password" autocomplete="current-password" required></label>
+  <button type="submit" class="btn btn-primary btn-block btn-lg">Sign in</button>
+</form>
+<p class="hint mt-2" style="text-align:center">No account yet, or forgot your password? Ask your supervisor for an invite link.</p>
+{% endblock %}

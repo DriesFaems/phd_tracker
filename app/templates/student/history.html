@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% from "ui.html" import icon %}
+{% block title %}History & feedback · PhD Tracker{% endblock %}
+{% block container_class %}narrow{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>History & feedback</h1>
+    <p>All your weekly updates and your supervisor's replies.{% if unread_ids %} <strong>{{ unread_ids|length }} new message{{ 's' if unread_ids|length > 1 }}</strong> highlighted below.{% endif %}</p>
+  </div>
+</div>
+
+{% for wl in logs %}
+<article class="log-card" id="log{{ wl.id }}">
+  <header>
+    <span class="row"><span class="week">{{ wl.week | week_num }}</span><span class="muted small">{{ wl.week | week_range }}</span></span>
+    <span class="row">
+      {% if wl.status == 'draft' %}<span class="badge amber">Draft, not submitted</span>{% else %}<span class="badge green">{{ icon("check") }} Submitted</span>{% endif %}
+      <a href="/student/week?week={{ wl.week }}" class="btn btn-ghost btn-sm">{{ icon("pen") }} Edit</a>
+    </span>
+  </header>
+  <div class="body">
+    {% if wl.summary %}<p class="log-summary">{{ icon("sparkles") }}<span>{{ wl.summary }}</span></p>{% endif %}
+    {% for e in entries.get(wl.id, []) %}{% with project=projects.get(e.project_id) %}{% include "partials/entry.html" %}{% endwith %}{% endfor %}
+    <details class="plain"><summary>Show original text</summary><div class="raw">{{ wl.raw_text }}</div></details>
+  </div>
+  {% with thread=comments.get(wl.id, []), log_id=wl.id, action_url='/student/log/' ~ wl.id ~ '/comment', next_url='/student/history#log' ~ wl.id, placeholder='Reply to your supervisor…', title='Feedback' %}
+  {% include "partials/thread.html" %}
+  {% endwith %}
+</article>
+{% else %}
+<div class="card empty">
+  {{ icon("history") }}
+  <h3>No updates yet</h3>
+  <p>Your weekly updates and your supervisor's feedback will appear here.</p>
+  <a href="/student/week" class="btn btn-primary">{{ icon("pen") }} Write this week's update</a>
+</div>
+{% endfor %}
+{% endblock %}
